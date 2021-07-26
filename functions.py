@@ -7,7 +7,7 @@ import pandas as pd
 import os
 import glob
 
-def load_dataset(id, folder):
+def load_dataset(folder, id):
     X = np.load(f'{folder}/{id}data.npy')
     y = np.load(f'{folder}/{id}label.npy').astype(dtype=np.int32)
     return X, y
@@ -25,7 +25,7 @@ def get_ids(folder):
 
 from sklearn.model_selection import StratifiedKFold, LeaveOneOut
 
-def evaluate(X, y, model, random_state=None):
+def evaluate(X, y, model, random_state=None, return_errors=False):
     n_splits = 10
     counts = np.unique(y, return_counts=True)[1]
     folds = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state) if np.any(counts >= n_splits) else LeaveOneOut()
@@ -37,7 +37,22 @@ def evaluate(X, y, model, random_state=None):
 
     errors = np.concatenate(errors)
     accuracy = 1 - (len(errors) / len(y))
-    return accuracy, errors
+    if return_errors:
+        return accuracy, errors
+    else:
+        return accuracy
+
+# Expertise space calculator
+
+def compute_expertise_space(models, folder, ids=None):
+    if ids is None:
+        ids = get_ids(folder)
+    acc = []
+    for id in ids:
+        X, y = load_dataset(folder, id)
+        acc.append([evaluate(X, y, model) for model in models.values()])
+    return pd.DataFrame(acc, columns=models.keys(), index=ids)
+
 
 
 # Uniformity test
@@ -59,7 +74,7 @@ def uniformity_test(X):
 
 from sklearn.neighbors import NearestNeighbors
 # 10-bin beta values by Chen et al 2020
-def feature_extractor(X, y):
+def extract_metafeatures(X, y):
     n, p = X.shape
     nn = NearestNeighbors()
     nn.fit(X)
@@ -77,6 +92,19 @@ def feature_extractor(X, y):
     
     beta = (inv_dist * criteria).sum(axis=1) / inv_dist.sum(axis=1)
     return np.histogram(beta, bins=10, range=(0, 1))[0]
+
+
+# Meta label generator
+
+from scipy.stats import ttest_ind
+
+def get_metalabel(X, y, models, ttest_samples=10):
+    acc = []
+    for i in range(ttest_samples):
+        acc.append([evaluate(X, y, model) for model in models.values()])
+    acc = np.stack(acc)
+    test_result = ttest_ind(acc[:, acc.mean(axis=0).argmax()], acc, alternative='greater').pvalue > 0.05
+    return test_result.dot(2 ** np.arange(4))
 
 
 # Actions
