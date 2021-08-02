@@ -91,7 +91,7 @@ def extract_metafeatures(X, y):
         criteria[idx, label_counts[i] - 1:] = False
     
     beta = (inv_dist * criteria).sum(axis=1) / inv_dist.sum(axis=1)
-    return np.histogram(beta, bins=10, range=(0, 1))[0]
+    return np.histogram(beta, bins=10, range=(0, 1), density=True)[0]
 
 
 # Meta label generator
@@ -103,8 +103,8 @@ def get_metalabel(X, y, models, ttest_samples=10):
     for i in range(ttest_samples):
         acc.append([evaluate(X, y, model) for model in models.values()])
     acc = np.stack(acc)
-    test_result = ttest_ind(acc[:, acc.mean(axis=0).argmax()], acc, alternative='greater').pvalue > 0.05
-    return test_result.dot(2 ** np.arange(4))
+    pvalues = ttest_ind(acc[:, acc.mean(axis=0).argmax()], acc, alternative='greater').pvalue
+    return pvalues > 0.05 
 
 
 # Actions
